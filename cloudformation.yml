@@ -1,0 +1,93 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+Description: |
+  Kittens Carousel is a static website application deployed on AWS Simple Storage Service (S3), served through Cloudfront and Route 53 using AWS Cloudformation Service.
+
+# Parameters:
+  
+Resources:
+  S3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: kitten-cf.clarusway.us
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
+      VersioningConfiguration:
+        Status: Enabled
+      WebsiteConfiguration:
+        IndexDocument: index.html
+
+  BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref S3Bucket
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Action:
+              - 's3:GetObject'
+            Effect: Allow
+            Resource: !Join
+              - ''
+              - - 'arn:aws:s3:::'
+                - !Ref S3Bucket
+                - /*
+            Principal: '*'
+            Sid: PublicReadGetObject
+
+  CloudfrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Aliases:
+          - !Ref S3Bucket
+        DefaultCacheBehavior:
+          AllowedMethods:
+          - GET
+          - HEAD
+          ForwardedValues:       
+            Cookies:
+              Forward: none
+            QueryString: true
+          TargetOriginId: KittensOrigin
+          ViewerProtocolPolicy: allow-all
+        Comment: "Cloudfront Distribution pointing to Kittens S3 bucket"
+        DefaultRootObject: index.html
+        Enabled: true
+        HttpVersion: http2
+        Origins:
+          - DomainName: kitten-cf.clarusway.us.s3-website-us-east-1.amazonaws.com
+            Id: KittensOrigin
+            CustomOriginConfig:
+              OriginProtocolPolicy: http-only
+        ViewerCertificate:
+          AcmCertificateArn: arn:aws:acm:us-east-1:046402772087:certificate/f872f3db-ba9d-46df-8c6a-9d165036e8ee
+          SslSupportMethod: sni-only
+
+  DNSRecord:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      Comment: "Alias record for kittens"
+      HostedZoneId: Z08348542LMKDSH94CCW6  # change it to parameter
+      RecordSets:
+      - Name: !Ref S3Bucket
+        Type: A
+        AliasTarget:
+          DNSName: !GetAtt CloudfrontDistribution.DomainName
+          HostedZoneId: Z2FDTNDATAQYW2
+
+Outputs:
+  BucketWebsiteURL:
+    Description: "S3 bucket URL"
+    Value: !GetAtt S3Bucket.WebsiteURL
+
+  CloudfrontEndpoint:
+    Description: "Cloudfront URL"
+    Value: !GetAtt CloudfrontDistribution.DomainName
+
+  FullyQualifiedDomainName:
+    Description: "FQDN"
+    Value: !Ref S3Bucket
